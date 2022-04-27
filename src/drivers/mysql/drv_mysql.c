@@ -811,7 +811,7 @@ static db_error_t check_error(db_conn_t *sb_con, const char *func,
 
     if (error == tmp || !strcmp(val, "all"))
     {
-      log_text(LOG_DEBUG, "Ignoring error %u %s, ", error, sb_con->sql_errmsg);
+      log_text(LOG_NOTICE, "Ignoring error %u %s, ", error, sb_con->sql_errmsg);
 
       /* Check if we should reconnect */
       switch (error)

@@ -131,7 +131,7 @@ void db_print_help(void)
   log_text(LOG_NOTICE, "General database options:\n");
   sb_print_options(db_args);
   log_text(LOG_NOTICE, "");
-  
+
   log_text(LOG_NOTICE, "Compiled-in database drivers:");
   SB_LIST_FOR_EACH(pos, &drivers)
   {
@@ -611,6 +611,8 @@ db_result_t *db_query(db_conn_t *con, const char *query, size_t len)
   else if (con->state == DB_CONN_RESULT_SET &&
            (rc = db_free_results_int(con)) != 0)
   {
+    log_text(LOG_FATAL,
+             "db_query set DB_ERROR_FATAL on con->state == DB_CONN_RESULT_SET and rc = db_free_results_int(con)) != 0");
     con->error = DB_ERROR_FATAL;
     return NULL;
   }
@@ -841,7 +843,7 @@ int db_parse_arguments(void)
   db_globals.driver = sb_get_value_string("db-driver");
 
   db_globals.debug = sb_get_value_flag("db-debug");
-  
+
   return 0;
 }
 
@@ -859,7 +861,7 @@ int db_print_value(db_bind_t *var, char *buf, int buflen)
     n = snprintf(buf, buflen, "NULL");
     return (n < buflen) ? n : -1;
   }
-  
+
   switch (var->type) {
     case DB_TYPE_TINYINT:
       n = snprintf(buf, buflen, "%hhd", *(char *)var->buffer);
@@ -955,7 +957,7 @@ int db_bulk_insert_init(db_conn_t *con, const char *query, size_t query_len)
   con->bulk_buffer = (char *)malloc(con->bulk_buflen);
   if (con->bulk_buffer == NULL)
     return 1;
-  
+
   con->bulk_commit_max = driver_caps.needs_commit ? ROWS_BEFORE_COMMIT : 0;
   con->bulk_commit_cnt = 0;
   strcpy(con->bulk_buffer, query);
@@ -1003,8 +1005,11 @@ int db_bulk_insert_next(db_conn_t *con, const char *query, size_t query_len)
                con->bulk_buflen);
       return 1;
     }
-    if (db_bulk_do_insert(con, 0))
+    if (db_bulk_do_insert(con, 0)) {
+      log_text(LOG_FATAL,
+               "db_bulk_insert_next->db_bulk_do_insert failed");
       return 1;
+    }
   }
 
   if (con->bulk_cnt > 0)
@@ -1029,7 +1034,7 @@ static int db_bulk_do_insert(db_conn_t *con, int is_last)
     return 0;
 
   if (db_query(con, con->bulk_buffer, con->bulk_ptr) == NULL &&
-      con->error != DB_ERROR_NONE)
+      con->error == DB_ERROR_FATAL)
     return 1;
 
 
@@ -1040,8 +1045,10 @@ static int db_bulk_do_insert(db_conn_t *con, int is_last)
     if (is_last || con->bulk_commit_cnt >= con->bulk_commit_max)
     {
       if (db_query(con, "COMMIT", 6) == NULL &&
-          con->error != DB_ERROR_NONE)
-        return 1;
+          con->error == DB_ERROR_FATAL) {
+            log_text(LOG_FATAL, "db_bulk_do_insert set DB_ERROR_FATAL on \'commit\'");
+            return 1;
+          }
       con->bulk_commit_cnt = 0;
     }
   }
